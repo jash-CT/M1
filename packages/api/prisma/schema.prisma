@@ -1,0 +1,147 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  region    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users       TenantUser[]
+  orders      Order[]
+  integrations Integration[]
+  teams       Team[]
+  analytics   AnalyticsEvent[]
+}
+
+model Team {
+  id       String @id @default(uuid())
+  name     String
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  region   String?
+
+  tenantUsers TenantUser[]
+  orders      Order[]
+}
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  passwordHash  String
+  name          String?
+  emailVerified Boolean  @default(false)
+  platformRole  String   @default("user")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenants TenantUser[]
+  refreshTokens RefreshToken[]
+}
+
+model TenantUser {
+  id        String   @id @default(uuid())
+  userId    String
+  tenantId  String
+  teamId    String?
+  role      String
+  invitedAt DateTime?
+  joinedAt  DateTime?
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  team      Team?   @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, tenantId])
+  @@index([tenantId])
+  @@index([userId])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+}
+
+model Order {
+  id          String   @id @default(uuid())
+  tenantId    String
+  teamId      String?
+  status      String   @default("draft")
+  totalCents  Int      @default(0)
+  currency    String   @default("USD")
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  team   Team?  @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  items  OrderItem[]
+  history OrderStatusHistory[]
+}
+
+model OrderItem {
+  id        String @id @default(uuid())
+  orderId   String
+  sku       String
+  name      String?
+  quantity  Int
+  unitCents Int
+  order     Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+}
+
+model OrderStatusHistory {
+  id        String   @id @default(uuid())
+  orderId   String
+  fromStatus String?
+  toStatus  String
+  note      String?
+  createdAt DateTime @default(now())
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+}
+
+model Integration {
+  id        String   @id @default(uuid())
+  tenantId  String
+  type      String
+  name      String
+  config    Json
+  secret    String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model AnalyticsEvent {
+  id        String   @id @default(uuid())
+  tenantId  String
+  event     String
+  payload   Json
+  region    String?
+  createdAt DateTime @default(now())
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([event])
+  @@index([createdAt])
+  @@index([tenantId, event, createdAt])
+}
